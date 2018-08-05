@@ -86,7 +86,7 @@ func collectorPush(gatewayPath string) {
 
 	// http://pushgateway.example.org:9091/metrics/job/some_job/instance/some_instance
 	url := gatewayPath
-	_, err = http.Post(url, "application/octet-stream", strings.NewReader(resp.Context))
+	_, err = http.Post(url, "application/octet-stream", strings.NewReader(res.Context))
 	if err != nil {
 		log.Errorln(err)
 	}
