@@ -23,8 +23,14 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/log"
 	"github.com/prometheus/common/version"
-	"github.com/prometheus/node_exporter/collector"
+	"github.com/cinience/node_exporter/collector"
 	"gopkg.in/alecthomas/kingpin.v2"
+	//"github.com/robfig/cron"
+	"os"
+	"os/signal"
+	"syscall"
+	"github.com/robfig/cron"
+	"strings"
 )
 
 func init() {
@@ -68,10 +74,31 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	h.ServeHTTP(w, r)
 }
 
+func collectorPush(gatewayPath string) {
+	res := ResponseWriterDelegate{}
+	req, err := http.NewRequest("GET", "http://localhost/metrics", nil)
+	if err != nil {
+		log.Errorln(err)
+	}
+	req.Header.Set("Accept-Encoding", "")
+	handler(&res, req)
+	//log.Infoln(resp.Context)
+
+	// http://pushgateway.example.org:9091/metrics/job/some_job/instance/some_instance
+	url := gatewayPath
+	_, err = http.Post(url, "application/octet-stream", strings.NewReader(resp.Context))
+	if err != nil {
+		log.Errorln(err)
+	}
+}
+
 func main() {
 	var (
 		listenAddress = kingpin.Flag("web.listen-address", "Address on which to expose metrics and web interface.").Default(":9100").String()
 		metricsPath   = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
+		gatewayPath   = kingpin.Flag("pushgateway.uri", "Path under which to expose metrics.").Default("http://localhost:9091/metrics/job/nls/instance/serviceName").String()
+		cronInterval = kingpin.Flag("pushgateway.interval", "Run Cron").Default("0").String()
+		isWeb = kingpin.Flag("web", "Run Web ").Bool()
 	)
 
 	log.AddFlags(kingpin.CommandLine)
@@ -97,6 +124,7 @@ func main() {
 		log.Infof(" - %s", n)
 	}
 
+
 	http.HandleFunc(*metricsPath, handler)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`<html>
@@ -108,9 +136,27 @@ func main() {
 			</html>`))
 	})
 
-	log.Infoln("Listening on", *listenAddress)
-	err = http.ListenAndServe(*listenAddress, nil)
-	if err != nil {
-		log.Fatal(err)
+	if *cronInterval != "0" {
+		log.Infoln("Crontab every " + *cronInterval + " second")
+		c := cron.New()
+		cronRule := fmt.Sprintf("*/%s * * * * *", *cronInterval)
+		c.AddFunc(cronRule, func() {
+			log.Infoln("collector...")
+			collectorPush(*gatewayPath)
+		})
+		c.Start()
+	}
+
+	if *isWeb {
+		log.Infoln("Listening on", *listenAddress)
+		err = http.ListenAndServe(*listenAddress, nil)
+		if err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		c := make(chan os.Signal)
+		signal.Notify(c, os.Interrupt, os.Kill, syscall.SIGUSR1, syscall.SIGUSR2)
+		s := <-c
+		log.Infoln("Quit ", s)
 	}
 }
