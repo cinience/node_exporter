@@ -115,16 +115,11 @@ func (n nodeCollector) Collect(ch chan<- prometheus.Metric) {
 	wg.Add(len(n.Collectors))
 	for name, c := range n.Collectors {
 		go func(name string, c Collector) {
-			log.Infoln(name)
 			execute(name, c, ch)
 			wg.Done()
-			log.Infoln(name + "........done")
 		}(name, c)
 	}
-	log.Infoln("8888888")
-
 	wg.Wait()
-	log.Infoln("9999999")
 }
 
 func execute(name string, c Collector, ch chan<- prometheus.Metric) {

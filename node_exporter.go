@@ -141,7 +141,6 @@ func main() {
 		c := cron.New()
 		cronRule := fmt.Sprintf("*/%s * * * * *", *cronInterval)
 		c.AddFunc(cronRule, func() {
-			log.Infoln("collector...")
 			collectorPush(*gatewayPath)
 		})
 		c.Start()
